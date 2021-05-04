@@ -31,6 +31,7 @@ fun main() {
             })
             .testMigration()
             .setEnableLogging()
+            .setMinApiVersion(4)
             .setStorage(KinFileStorage.Builder("/tmp/kin"))
             .build()
 
