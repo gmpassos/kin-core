@@ -1,0 +1,229 @@
+buildscript {
+    ext {
+        kotlinVersion = "1.4.20"
+    }
+    repositories {
+        jcenter()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.github.jengelman.gradle.plugins:shadow:5.2.0'
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion"
+    }
+}
+
+apply plugin: 'java-library'
+apply plugin: 'kotlin'
+apply plugin: 'com.github.johnrengelman.shadow'
+apply plugin: 'maven-publish'
+
+
+sourceSets {
+    integrationTest {
+        compileClasspath += main.output + test.output
+        runtimeClasspath += main.output + test.output
+    }
+}
+
+configurations {
+    integrationTestImplementation.extendsFrom testImplementation
+    integrationTestRuntimeOnly.extendsFrom testRuntimeOnly
+    shaded.extendsFrom(shadow)
+}
+
+
+// Our goal is to shade our 'hard to resolve conflicts' dependencies & transitive deps
+// since downstream this can get really hard to manage if there are conflicts with these.
+def groupsToShade = ['io.grpc',
+                     'com.google.protobuf',
+                     'com.google.guava',
+                     'com.google.code.gson',
+                     'com.google.code.findbugs',
+                     'com.google.errorprone',
+                     'com.google.re2j',
+                     'com.google.j2objc',
+                     'org.codehaus.mojo',
+                     'org.checkerframework',
+                     'commons-validator',
+                     'io.opencensus',
+                     'com.github.kinecosystem',
+                     groupId]
+// Output to build/libs/base-shaded.jar
+shadowJar {
+    dependsOn assemble
+    archiveClassifier.set ''
+    archiveBaseName.set 'base-shaded'
+    relocate 'io.grpc', 'org.kin.shaded.io.grpc'
+    relocate 'com.google', 'org.kin.shaded.com.google'
+    relocate 'javax.annotation', 'org.kin.shaded.javax.annotation'
+    relocate 'org.codehaus', 'org.kin.shaded.org.codehaus'
+    relocate 'org.checkerframework', 'org.kin.shaded.org.checkerframework'
+    relocate 'org.apache', 'org.kin.shaded.org.apache'
+    relocate 'io.opencensus', 'org.kin.shaded.io.opencensus'
+    relocate 'google.protobuf', 'org.kin.shaded.google.protobuf'
+
+    dependencies {
+        exclude(dependency {
+            it.moduleGroup == '.*'
+        })
+        include(dependency {
+            groupsToShade.contains(it.moduleGroup)
+        })
+        include(project(':base-storage'))
+    }
+}
+
+dependencies {
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
+    implementation deps.kotlin_stdlib
+    implementation deps.gson
+    implementation deps.okhttp
+    implementation deps.oksse
+    implementation deps.i2p_crypto_eddsa
+    implementation deps.slf4j
+    implementation deps.grpc_stub
+    implementation deps.grpc_protobuf
+    implementation deps.grpc_okhttp
+    implementation deps.agora_api
+    implementation project(':base-storage')
+    implementation 'com.github.joshjdevl.libsodiumjni:libsodium-jni:2.0.1'
+
+    //implementation "org.conscrypt:-openjdk-uber:2.2.1"
+    implementation group: 'org.conscrypt', name: 'conscrypt-openjdk-uber', version: '2.5.2'
+
+    implementation group: 'org.slf4j', name: 'slf4j-simple', version: '1.7.30'
+
+
+    testImplementation deps.kotlin_stdlib
+    testImplementation deps.kotlin_junit
+    testImplementation deps.kotlinMockito
+    testImplementation deps.grpc_netty_shaded
+//    testImplementation deps.grpc_netty_tcnative_boringssl_static
+
+    testImplementation deps.okhttp_mockwebserver
+    testImplementation deps.grpc_testing
+    implementation "org.jetbrains.kotlin:kotlin-script-runtime:1.4.20"
+}
+
+task integrationTest(type: Test) {
+    description = 'Runs integration tests.'
+    group = 'verification'
+    testClassesDirs = sourceSets.integrationTest.output.classesDirs
+    classpath = sourceSets.integrationTest.runtimeClasspath
+    outputs.upToDateWhen { false }
+    shouldRunAfter test
+}
+
+check.dependsOn integrationTest
+
+sourceCompatibility = JavaVersion.VERSION_1_8
+targetCompatibility = JavaVersion.VERSION_1_8
+
+tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).all {
+  kotlinOptions {
+    jvmTarget = "1.8"
+  }
+}
+
+task sourcesJar(type: Jar, dependsOn: classes) {
+    classifier = 'sources'
+    from sourceSets.main.allSource
+}
+
+task javadocJar(type: Jar, dependsOn: javadoc) {
+    classifier = 'javadoc'
+    from javadoc.destinationDir
+}
+
+artifacts {
+    archives sourcesJar
+    archives javadocJar
+}
+
+task testDebugUnitTest(type: Test)
+
+task testReleaseUnitTest(type: Test)
+
+version = libraryVersion
+group = groupId
+
+afterEvaluate {
+    publishing {
+        publications {
+            normal(MavenPublication) {
+                from components.java
+
+                artifact sourcesJar
+                artifact javadocJar
+            }
+            shaded(MavenPublication) {
+                artifactId "base-shaded"
+                group groupId
+                version libraryVersion
+
+                artifact shadowJar
+                artifact sourcesJar
+                artifact javadocJar
+
+                pom {
+                    packaging 'jar'
+                    withXml {
+                        def root = asNode()
+                        root.appendNode("name", 'base-compat')
+                        root.appendNode("url", siteUrl)
+                        root.children().last() + pomConfig
+                        def depsNode = root["dependencies"][0] ?: root.appendNode("dependencies")
+
+                        def addDep = {
+                            if (it.group == null) return // Avoid empty dependency nodes
+                            def dependencyNode = depsNode.appendNode('dependency')
+                            dependencyNode.appendNode('groupId', it.group)
+                            dependencyNode.appendNode('artifactId', it.name)
+                            dependencyNode.appendNode('version', it.version)
+                            if (it.hasProperty('optional') && it.optional) {
+                                dependencyNode.appendNode('optional', 'true')
+                            }
+                            dependencyNode.appendNode("scope", "runtime")
+                        }
+
+                        // Add deps that everyone has
+                        configurations.implementation.dependencies.findAll {
+                            if (!groupsToShade.contains(it.group)) {
+                                it
+                            }
+                        }.each addDep
+                        // Add flavor specific deps
+                        configurations["shaded"].allDependencies.each addDep
+
+                        // NOTE: This library doesn't use builtTypes specific dependencies, so no need to add them.
+                    }
+                }
+            }
+        }
+
+        repositories {
+            maven {
+                url "s3://maven.kin/releases"
+                credentials(AwsCredentials) {
+                    accessKey project.hasProperty('awsAccessKeyId') ? awsAccessKeyId : System.getenv('AWS_ACCESS_KEY_ID')
+                    secretKey project.hasProperty('awsSecretAccessKey') ? awsSecretAccessKey : System.getenv('AWS_SECRET_ACCESS_KEY')
+                }
+            }
+        }
+    }
+
+
+}
+
+
+task customFatJar(type: Jar) {
+    manifest {
+        attributes 'Title': archivesBaseName, 'Manifest-Version': '1.0', 'Version': version, 'Main-Class' : 'com.strobel.decompiler.DecompilerDriver'
+    }
+    baseName = 'kin-base-ALL'
+    from { configurations.compile.collect { it.isDirectory() ? it : zipTree(it) } }
+    with jar
+}
+
+
+

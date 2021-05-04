@@ -1,0 +1,160 @@
+buildscript {
+    ext.kotlin_version = '1.4.20'
+    repositories {
+        google()
+        jcenter()
+
+    }
+    dependencies {
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+    }
+    ext {
+        versions = [:]
+        plugins = [:]
+        deps = [:]
+
+        versions.kotlin = kotlin_version
+        versions.junit = '4.12'
+        versions.museum = 'ff66b5200c'
+        versions.toml4j = '0.5.1'
+        versions.gson = '2.8.2'
+        versions.okhttp = '3.12.12'
+        versions.oksse = '4121e87e8c'
+        versions.i2p_crypto_eddsa = '0.3.0'
+        versions.slf4j = '1.7.25'
+        versions.kotlinmockito = '2.1.0'
+        versions.grpcProtobuf = '1.33.1'
+        versions.googleCommonProtos = '1.16.0'
+        versions.multidex = '2.0.0'
+        versions.grpcNetty_tcnative_boringssl = '2.0.20.Final'
+        versions.agora_api = "0.24.0"
+        versions.grpc_validate = "0.4.1"
+        versions.firebase = "17.2.2"
+        versions.play_services_base = "17.3.0"
+
+        deps.firebase_analytics = "com.google.firebase:firebase-analytics:${versions.firebase}"
+
+        deps.androidx_appcompat = "androidx.appcompat:appcompat:$versions.androidx_appcompat"
+        deps.androidx_recyclerview = "androidx.recyclerview:recyclerview:$versions.androidx_recyclerview"
+        deps.androidx_ktx = "androidx.core:core-ktx:$versions.androidx_ktx"
+        deps.android_material = "com.google.android.material:material:$versions.android_material"
+        deps.android_coordinator = "androidx.coordinatorlayout:coordinatorlayout:$versions.androidx_coordinator"
+        deps.play_services_base = "com.google.android.gms:play-services-base:$versions.play_services_base"
+
+        deps.multi_dex = "androidx.multidex:multidex:$versions.multidex"
+        deps.kotlin_stdlib = "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$versions.kotlin"
+        deps.kotlin_junit = "org.jetbrains.kotlin:kotlin-test-junit:$kotlin_version"
+        deps.appcompat = "androidx.appcompat:appcompat:$versions.androidx_appcompat"
+        deps.ktx = "androidx.core:core-ktx:$versions.androidx_ktx"
+        deps.recyclerview = "androidx.recyclerview:recyclerview:${versions.androidx_recyclerview}"
+
+        deps.kotlinMockito = "com.nhaarman.mockitokotlin2:mockito-kotlin:$versions.kotlinmockito"
+        deps.junit = "junit:junit:$versions.junit"
+        deps.museum_annotations = "com.github.mproberts.museum:annotations:${versions.museum}"
+        deps.museum_showcase = "com.github.mproberts.museum:showcase:${versions.museum}@aar"
+
+        deps.gson = "com.google.code.gson:gson:${versions.gson}"
+        deps.okhttp = "com.squareup.okhttp3:okhttp:${versions.okhttp}"
+        deps.okhttp_mockwebserver = "com.squareup.okhttp3:mockwebserver:${versions.okhttp}"
+        deps.oksse = "com.github.kinecosystem:oksse:${versions.oksse}"
+        deps.i2p_crypto_eddsa = "net.i2p.crypto:eddsa:${versions.i2p_crypto_eddsa}"
+
+        deps.slf4j_android = "org.slf4j:slf4j-android:$versions.slf4j"
+        deps.slf4j = "org.slf4j:slf4j-api:$versions.slf4j"
+
+        deps.grpc_common_protos = "com.google.api.grpc:proto-google-common-protos:${versions.googleCommonProtos}"
+        deps.grpc_okhttp = "io.grpc:grpc-okhttp:${versions.grpcProtobuf}"
+        deps.grpc_netty_shaded = "io.grpc:grpc-netty:${versions.grpcProtobuf}"
+        deps.grpc_netty_tcnative_boringssl_static = "io.netty:netty-tcnative-boringssl-static:${versions.grpcNetty_tcnative_boringssl}"
+        deps.grpc_stub = "io.grpc:grpc-stub:${versions.grpcProtobuf}"
+        deps.grpc_protobuf = "io.grpc:grpc-protobuf-lite:${versions.grpcProtobuf}"
+        deps.grpc_android = "io.grpc:grpc-android:${versions.grpcProtobuf}"
+        deps.grpc_validate = "io.envoyproxy.protoc-gen-validate:pgv-java-stub:${versions.grpc_validate}"
+        deps.grpc_testing = "io.grpc:grpc-testing:${versions.grpcProtobuf}"
+
+//        deps.agora_api = "com.github.kinecosystem:agora-api-internal:${versions.agora_api}" // INTERNAL TESTING VERSION
+        deps.agora_api = "org.kin.agora.gen:agora-api:${versions.agora_api}" // PROD VERSION
+
+        pomConfig = {
+            licenses {
+                license {
+                    name "The MIT License"
+                    url "https://github.com/kinecosystem/kin-android/LICENSE.md"
+                    distribution "repo"
+                }
+            }
+            developers {
+                developer {
+                    name "Kin Ecosystem"
+                    email "android@kin.org"
+                }
+            }
+
+            scm {
+                url "https://github.com/kinecosystem/kin-android"
+            }
+        }
+
+        bintrayUser = findProperty("bintray.user") ?: System.getProperty("bintray.user")
+        bintrayKey = findProperty("bintray.key") ?: System.getProperty("bintray.key")
+        buildNumber = findProperty("build.number") ?: System.getProperty("build.number")
+    }
+}
+
+allprojects {
+    ext {
+        // Libraries
+        groupId = "org.kin.sdk.android"
+        libraryVersion = "0.4.5" // NOTE: ALSO CHANGE SDKConfig.versionString when updating. Should be identical.
+        siteUrl = "https://github.com/kinecosystem/kin-android"
+        gitUrl = "https://github.com/kinecosystem/kin-android.git"
+    }
+
+    version = libraryVersion
+    group = groupId
+
+    repositories {
+        google()
+        jcenter()
+        mavenCentral()
+        maven {
+            url  "https://dl.bintray.com/kinecosystem/agora-api"
+        }
+//        maven {
+//            url "https://jitpack.io"
+//            credentials { username jitpackAuthToken }
+//        }
+        maven { url "https://jitpack.io" }
+    }
+
+    tasks.withType(Test) {
+        systemProperty "java.library.path", "${System.getProperty("java.library.path")}:$rootDir/jniLibs/macOS:$rootDir/jniLibs/linux"
+        testLogging {
+            outputs.upToDateWhen {false}
+            showStandardStreams = true
+        }
+    }
+
+}
+
+task copyNativeLibsForLinux() {
+    doLast {
+        println "sudo cp jniLibs/linux/libsodium.so /usr/lib".execute()
+        println "sudo cp jniLibs/linux/libsodiumjni.so /usr/lib".execute()
+    }
+}
+
+task copyNativeLibsForMacOS() {
+    doLast {
+        println "cp jniLibs/macOS/libsodium.dylib /usr/local/lib".execute()
+        println "cp jniLibs/macOS/libsodium.a /usr/local/lib".execute()
+        println "cp jniLibs/macOS/libsodium.la /usr/local/lib".execute()
+        println "cp jniLibs/macOS/libsodium.jnilib /usr/local/lib".execute()
+        println "cp jniLibs/macOS/pkgconfig/libsodium.pc /usr/local/lib/pkgconfig/libsodium.pc".execute()
+    }
+}
+
+task clean(type: Delete) {
+    delete rootProject.buildDir
+}
+

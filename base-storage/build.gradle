@@ -1,0 +1,126 @@
+buildscript {
+    repositories {
+        jcenter()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.google.protobuf:protobuf-gradle-plugin:0.8.14'
+    }
+}
+
+apply plugin: "java"
+apply plugin: "com.google.protobuf"
+apply plugin: "maven"
+apply plugin: "maven-publish"
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation deps.grpc_protobuf
+    implementation deps.grpc_stub
+}
+
+def generatedSrcRoot = file("${buildDir}/generated/source/proto/main/java/")
+sourceSets.main {
+    proto {
+        srcDir "${rootDir}/base-storage/proto/"
+    }
+    java {
+        srcDirs = ["${generatedSrcRoot}"]
+    }
+}
+
+sourceCompatibility = JavaVersion.VERSION_1_8
+targetCompatibility = JavaVersion.VERSION_1_8
+
+compileJava {
+    options.annotationProcessorGeneratedSourcesDirectory generatedSrcRoot
+}
+
+def protocVersion = "3.12.0"
+protobuf {
+    protoc {
+        artifact = "com.google.protobuf:protoc:${protocVersion}"
+    }
+    plugins {
+        grpc {
+            artifact = "io.grpc:protoc-gen-grpc-java:${versions.grpcProtobuf}"
+        }
+    }
+    generateProtoTasks {
+        all().each { task ->
+            task.builtins {
+                java {
+                    option "lite"
+                }
+            }
+        }
+        all()*.plugins {
+            grpc {
+                option 'lite'
+            }
+        }
+    }
+}
+
+jar {
+    baseName = 'base-storage'
+    manifest {
+        attributes('kin-storage': project.name,
+                'Version': project.version)
+    }
+}
+
+task sourcesJar(type: Jar) {
+    from sourceSets.main.allSource
+    classifier = 'sources'
+}
+
+artifacts {
+    archives sourcesJar
+}
+
+publishing {
+    publications {
+        release(MavenPublication) {
+            artifact sourcesJar
+            artifact jar
+
+            pom {
+                packaging 'jar'
+                withXml {
+                    def root = asNode()
+                    root.children().last() + pomConfig
+                    def depsNode = root["dependencies"][0] ?: root.appendNode("dependencies")
+                    def addDep = {
+                        if (it.group == null) return // Avoid empty dependency nodes
+
+                        def dependencyNode = depsNode.appendNode('dependency')
+                        dependencyNode.appendNode('groupId', it.group)
+                        dependencyNode.appendNode('artifactId', it.name)
+                        dependencyNode.appendNode('version', it.version)
+
+                        if (it.hasProperty('optional') && it.optional) {
+                            dependencyNode.appendNode('optional', 'true')
+                        }
+                        dependencyNode.appendNode("scope", "runtime")
+                    }
+
+                    configurations.implementation.dependencies.each addDep
+                }
+            }
+        }
+    }
+    repositories {
+        maven {
+            url "s3://maven.kin/releases"
+            credentials(AwsCredentials) {
+                accessKey project.hasProperty('awsAccessKeyId') ? awsAccessKeyId : System.getenv('AWS_ACCESS_KEY_ID')
+                secretKey project.hasProperty('awsSecretAccessKey') ? awsSecretAccessKey : System.getenv('AWS_SECRET_ACCESS_KEY')
+            }
+        }
+    }
+}
+
