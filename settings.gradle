@@ -1,2 +1,3 @@
 include ':base'
 include ':base-storage'
+include ':base-compat'
