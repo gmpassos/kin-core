@@ -1,4 +1,4 @@
-package example;
+package org.kin;
 
 import kotlin.Pair;
 import kotlin.Unit;
