@@ -6,4 +6,4 @@ package org.kin.sdk.base.models
  * @property appName - The name of your App that can be used to display to a user in certain contexts.
  * @property appIconResourceId - The ResourceId of your app's icon.
  */
-data class AppInfo(val appIndex: AppIdx, val kinAccountId: KinAccount.Id, val appName: String, val appIconResourceId: Int)
+data class AppInfo(val appIndex: AppIdx, var kinAccountId: KinAccount.Id, val appName: String, val appIconResourceId: Int)

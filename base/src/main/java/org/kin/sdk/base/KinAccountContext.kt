@@ -771,6 +771,7 @@ abstract class KinAccountContextBase : KinAccountReadOperations, KinPaymentReadO
             }
         }
     }
+
     private val paymentsSubject: ListSubject<KinPayment> by lazy {
         ListSubject<KinPayment>(
             { requestNextPage().map { it.asKinPayments(true) }.then(paymentsSubject::onNext) },

@@ -18,6 +18,7 @@ import org.kin.sdk.base.tools.Base58;
 import org.kin.sdk.base.tools.DisposeBag;
 import org.kin.sdk.base.tools.Observer;
 import org.kin.sdk.base.tools.Optional;
+import org.kin.stellarfork.StrKey;
 
 import java.util.List;
 
@@ -25,13 +26,15 @@ public final class Kin {
 
     private final boolean production;
     private final int appIndex;
-    private final String appAddress;
+    private final String appName;
     private final String credentialsUser;
     private final String credentialsPass;
     private final Function1<KinBalance, Unit> balanceChanged;
     private final Function1<List<? extends KinPayment>, Unit> paymentHappened;
 
     private final DisposeBag lifecycle;
+
+    private AppInfo appInfo;
 
     private final KinEnvironment.Agora environment;
     private KinAccountContext context;
@@ -43,7 +46,6 @@ public final class Kin {
      *
      * @param production      Boolean indicating if [NetworkEnvironment] is in production or test
      * @param appIndex        App Index assigned by the Kin Foundation
-     * @param appAddress      Blockchain address for the app in stellarBase32Encoded format
      * @param credentialsUser User id of [AppUserCreds] sent to your webhook for authentication
      * @param credentialsPass Password of [AppUserCreds] sent to your webhook for authentication
      * @param onBalanceChange Callback [balanceChanged] to notify the app of balance changes
@@ -53,7 +55,7 @@ public final class Kin {
     public Kin(
             boolean production,
             int appIndex,
-            String appAddress,
+            String appName,
             String credentialsUser,
             String credentialsPass,
             final Function1<KinBalance, Unit> onBalanceChange,
@@ -62,39 +64,55 @@ public final class Kin {
     ) {
         this.production = production;
         this.appIndex = appIndex;
-        this.appAddress = appAddress;
+        this.appName = appName;
         this.credentialsUser = credentialsUser;
         this.credentialsPass = credentialsPass;
         this.balanceChanged = onBalanceChange;
         this.paymentHappened = onPayment;
         this.lifecycle = new DisposeBag();
 
+        _setAppInfo();
+
         //fetch the account and set the context
-        this.environment = this.getEnvironment();
+        this.environment = this.buildEnvironment();
+
         this.environment.allAccountIds().then(it -> {
             //First get (or create) an account id for this device
             String accountId = it.size() == 0 ? createAccount() : ((KinAccount.Id) it.get(0)).stellarBase32Encode();
 
             //Then set the context with that single account
             this.context = this.getKinContext(accountId);
+            _setAppInfo();
 
             if (onAccountContext != null) {
                 onAccountContext.invoke(this);
             }
 
+            //handle listeners
+            if (this.balanceChanged != null) {
+                this.watchBalance(); //watch for changes in balance
+            }
+
+            if (this.paymentHappened != null) {
+                this.watchPayments(); //watch for changes in payments
+            }
+
             return null;
         });
-
-        //handle listeners
-        if (this.balanceChanged != null) {
-            this.watchBalance(); //watch for changes in balance
-        }
-
-        if (this.paymentHappened != null) {
-            this.watchPayments(); //watch for changes in payments
-        }
     }
 
+    void _setAppInfo() {
+        KinAccount.Id accountId = context != null ? context.getAccountId() : null ;
+        if (accountId == null) {
+            accountId = new KinAccount.Id(StrKey.encodeStellarAccountId(new byte[32]));
+        }
+
+        appInfo = new AppInfo(new AppIdx(appIndex), accountId, appName, 0);
+
+        if (environment != null) {
+            environment.getAppInfoProvider().getAppInfo().setKinAccountId(accountId);
+        }
+    }
 
     /**
      * Return the device's blockchain address
@@ -233,7 +251,7 @@ public final class Kin {
         return kinContext.getAccountId().stellarBase32Encode();
     }
 
-    private KinEnvironment.Agora getEnvironment() {
+    private KinEnvironment.Agora buildEnvironment() {
         String storageLoc = "/tmp/kin";
 
         NetworkEnvironment networkEnv = this.production ? NetworkEnvironment.KinStellarMainNetKin3.INSTANCE :
@@ -258,12 +276,7 @@ public final class Kin {
                     }
 
                     {
-                        this.appInfo = new AppInfo(
-                                new AppIdx(appIndex),
-                                new KinAccount.Id(appAddress),
-                                "Example",
-                                0
-                        );
+                        this.appInfo = Kin.this.appInfo;
                     }
                 })
                 .setMinApiVersion(4) //make sure we're on the Agora chain (not the former stellar)
@@ -275,7 +288,7 @@ public final class Kin {
     public String toString() {
         return "Kin{" +
                 "production=" + production +
-                ", appAddress='" + appAddress + '\'' +
+                ", appInfo='" + appInfo + '\'' +
                 ", credentialsUser='" + credentialsUser + '\'' +
                 ", context='" + context + '\'' +
                 '}';
